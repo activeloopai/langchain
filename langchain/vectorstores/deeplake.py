@@ -13,7 +13,7 @@ import numpy as np
 logger = logging.getLogger()
 
 
-def L2_search(query_embedding, data_vectors, k=4):
+def L2_search(query_embedding: np.ndarray, data_vectors: np.ndarray, k: int=4) -> List[int]:
     """ naive L2 search for nearest neighbors """
     # Calculate the L2 distance between the query_vector and all data_vectors
     distances = np.linalg.norm(data_vectors - query_embedding, axis=1)
@@ -46,7 +46,7 @@ class DeepLake(VectorStore):
     def __init__(
         self,
         dataset_path: str = _LANGCHAIN_DEFAULT_DEEPLAKE_PATH,
-        token: str = None,
+        token: Optional[str] = None,
         embedding_function: Optional[Embeddings] = None,
     ) -> None:
         """Initialize with Deep Lake client."""
@@ -102,12 +102,12 @@ class DeepLake(VectorStore):
             embeddings = self._embedding_function.embed_documents(list(texts))
 
         if metadatas is None:
-            metadatas = [None] * len(texts)
+            metadatas = [{}] * len(ids)
 
-        elements = zip(texts, embeddings, metadatas, ids)
+        elements = zip(texts, embeddings, metadatas, ids) # type: ignore
 
         @self._deeplake.compute
-        def ingest(sample_in, sample_out):
+        def ingest(sample_in: tuple, sample_out: list) -> None:
             s = {"text": sample_in[0], "embedding": sample_in[1],
                  "metadata":  sample_in[2], "ids": sample_in[3]}
             sample_out.append(s)
@@ -125,9 +125,9 @@ class DeepLake(VectorStore):
             self.ds.summary()
             ds_view = self.ds.filter(lambda x: query in x['text'].data()['value'])
         else:
-            query = np.array(self._embedding_function.embed_query(query))
+            np_query = np.array(self._embedding_function.embed_query(query))
             embeddings = self.ds.embedding.numpy()
-            indices = L2_search(query, embeddings, k=k)
+            indices = L2_search(np_query, embeddings, k=k)
             ds_view = self.ds[indices]
             
         docs = [
