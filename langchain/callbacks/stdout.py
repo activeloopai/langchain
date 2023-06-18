@@ -37,7 +37,7 @@ class StdOutCallbackHandler(BaseCallbackHandler):
         self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any
     ) -> None:
         """Print out that we are entering a chain."""
-        class_name = serialized["name"]
+        class_name = serialized.get("name", "")
         print(f"\n\n\033[1m> Entering new {class_name} chain...\033[0m")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
@@ -74,9 +74,11 @@ class StdOutCallbackHandler(BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         """If not the final action, print out observation."""
-        print_text(f"\n{observation_prefix}")
+        if observation_prefix is not None:
+            print_text(f"\n{observation_prefix}")
         print_text(output, color=color if color else self.color)
-        print_text(f"\n{llm_prefix}")
+        if llm_prefix is not None:
+            print_text(f"\n{llm_prefix}")
 
     def on_tool_error(
         self, error: Union[Exception, KeyboardInterrupt], **kwargs: Any
@@ -89,7 +91,7 @@ class StdOutCallbackHandler(BaseCallbackHandler):
         text: str,
         color: Optional[str] = None,
         end: str = "",
-        **kwargs: Optional[str],
+        **kwargs: Any,
     ) -> None:
         """Run when agent ends."""
         print_text(text, color=color if color else self.color, end=end)

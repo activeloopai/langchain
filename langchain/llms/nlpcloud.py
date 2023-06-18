@@ -1,13 +1,14 @@
 """Wrapper around NLPCloud APIs."""
 from typing import Any, Dict, List, Mapping, Optional
 
-from pydantic import BaseModel, Extra, root_validator
+from pydantic import Extra, root_validator
 
+from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.llms.base import LLM
 from langchain.utils import get_from_dict_or_env
 
 
-class NLPCloud(LLM, BaseModel):
+class NLPCloud(LLM):
     """Wrapper around NLPCloud large language models.
 
     To use, you should have the ``nlpcloud`` python package installed, and the
@@ -74,9 +75,9 @@ class NLPCloud(LLM, BaseModel):
                 values["model_name"], nlpcloud_api_key, gpu=True, lang="en"
             )
         except ImportError:
-            raise ValueError(
+            raise ImportError(
                 "Could not import nlpcloud python package. "
-                "Please it install it with `pip install nlpcloud`."
+                "Please install it with `pip install nlpcloud`."
             )
         return values
 
@@ -111,7 +112,13 @@ class NLPCloud(LLM, BaseModel):
         """Return type of llm."""
         return "nlpcloud"
 
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+    def _call(
+        self,
+        prompt: str,
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> str:
         """Call out to NLPCloud's create endpoint.
 
         Args:
@@ -135,7 +142,6 @@ class NLPCloud(LLM, BaseModel):
             end_sequence = stop[0]
         else:
             end_sequence = None
-        response = self.client.generation(
-            prompt, end_sequence=end_sequence, **self._default_params
-        )
+        params = {**self._default_params, **kwargs}
+        response = self.client.generation(prompt, end_sequence=end_sequence, **params)
         return response["generated_text"]

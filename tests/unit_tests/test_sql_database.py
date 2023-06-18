@@ -1,9 +1,18 @@
 # flake8: noqa=E501
 """Test SQL database wrapper."""
 
-from sqlalchemy import Column, Integer, MetaData, String, Table, create_engine, insert
+from sqlalchemy import (
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    insert,
+)
 
-from langchain.sql_database import SQLDatabase
+from langchain.sql_database import SQLDatabase, truncate_word
 
 metadata_obj = MetaData()
 
@@ -12,6 +21,7 @@ user = Table(
     metadata_obj,
     Column("user_id", Integer, primary_key=True),
     Column("user_name", String(16), nullable=False),
+    Column("user_bio", Text, nullable=True),
 )
 
 company = Table(
@@ -32,11 +42,13 @@ def test_table_info() -> None:
     CREATE TABLE user (
             user_id INTEGER NOT NULL,
             user_name VARCHAR(16) NOT NULL,
+            user_bio TEXT,
             PRIMARY KEY (user_id)
     )
-
-    SELECT * FROM 'user' LIMIT 3;
-    user_id user_name
+    /*
+    3 rows from user table:
+    user_id user_name user_bio
+    /*
 
 
     CREATE TABLE company (
@@ -44,9 +56,10 @@ def test_table_info() -> None:
             company_location VARCHAR NOT NULL,
             PRIMARY KEY (company_id)
     )
-
-    SELECT * FROM 'company' LIMIT 3;
+    /*
+    3 rows from company table:
     company_id company_location
+    */
     """
 
     assert sorted(" ".join(output.split())) == sorted(" ".join(expected_output.split()))
@@ -57,8 +70,8 @@ def test_table_info_w_sample_rows() -> None:
     engine = create_engine("sqlite:///:memory:")
     metadata_obj.create_all(engine)
     values = [
-        {"user_id": 13, "user_name": "Harrison"},
-        {"user_id": 14, "user_name": "Chase"},
+        {"user_id": 13, "user_name": "Harrison", "user_bio": "bio"},
+        {"user_id": 14, "user_name": "Chase", "user_bio": "bio"},
     ]
     stmt = insert(user).values(values)
     with engine.begin() as conn:
@@ -74,21 +87,23 @@ def test_table_info_w_sample_rows() -> None:
         company_location VARCHAR NOT NULL,
         PRIMARY KEY (company_id)
 )
-
-        SELECT * FROM 'company' LIMIT 2;
+        /*
+        2 rows from company table:
         company_id company_location
-
+        */
 
         CREATE TABLE user (
         user_id INTEGER NOT NULL,
         user_name VARCHAR(16) NOT NULL,
+        user_bio TEXT,
         PRIMARY KEY (user_id)
         )
-
-        SELECT * FROM 'user' LIMIT 2;
-        user_id user_name
-        13 Harrison
-        14 Chase
+        /*
+        2 rows from user table:
+        user_id user_name user_bio
+        13 Harrison bio
+        14 Chase bio
+        */
         """
 
     assert sorted(output.split()) == sorted(expected_output.split())
@@ -98,13 +113,16 @@ def test_sql_database_run() -> None:
     """Test that commands can be run successfully and returned in correct format."""
     engine = create_engine("sqlite:///:memory:")
     metadata_obj.create_all(engine)
-    stmt = insert(user).values(user_id=13, user_name="Harrison")
+    stmt = insert(user).values(
+        user_id=13, user_name="Harrison", user_bio="That is my Bio " * 24
+    )
     with engine.begin() as conn:
         conn.execute(stmt)
     db = SQLDatabase(engine)
-    command = "select user_name from user where user_id = 13"
+    command = "select user_id, user_name, user_bio from user where user_id = 13"
     output = db.run(command)
-    expected_output = "[('Harrison',)]"
+    user_bio = "That is my Bio " * 19 + "That is my..."
+    expected_output = f"[(13, 'Harrison', '{user_bio}')]"
     assert output == expected_output
 
 
@@ -120,3 +138,11 @@ def test_sql_database_run_update() -> None:
     output = db.run(command)
     expected_output = ""
     assert output == expected_output
+
+
+def test_truncate_word() -> None:
+    assert truncate_word("Hello World", length=5) == "He..."
+    assert truncate_word("Hello World", length=0) == "Hello World"
+    assert truncate_word("Hello World", length=-10) == "Hello World"
+    assert truncate_word("Hello World", length=5, suffix="!!!") == "He!!!"
+    assert truncate_word("Hello World", length=12, suffix="!!!") == "Hello World"

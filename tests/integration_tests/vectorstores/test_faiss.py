@@ -1,4 +1,6 @@
 """Test FAISS functionality."""
+import datetime
+import math
 import tempfile
 
 import pytest
@@ -72,6 +74,28 @@ def test_faiss_with_metadatas() -> None:
     assert output == [Document(page_content="foo", metadata={"page": 0})]
 
 
+def test_faiss_with_metadatas_and_filter() -> None:
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": i} for i in range(len(texts))]
+    docsearch = FAISS.from_texts(texts, FakeEmbeddings(), metadatas=metadatas)
+    expected_docstore = InMemoryDocstore(
+        {
+            docsearch.index_to_docstore_id[0]: Document(
+                page_content="foo", metadata={"page": 0}
+            ),
+            docsearch.index_to_docstore_id[1]: Document(
+                page_content="bar", metadata={"page": 1}
+            ),
+            docsearch.index_to_docstore_id[2]: Document(
+                page_content="baz", metadata={"page": 2}
+            ),
+        }
+    )
+    assert docsearch.docstore.__dict__ == expected_docstore.__dict__
+    output = docsearch.similarity_search("foo", k=1, filter={"page": 1})
+    assert output == []
+
+
 def test_faiss_search_not_found() -> None:
     """Test what happens when document is not found."""
     texts = ["foo", "bar", "baz"]
@@ -104,8 +128,41 @@ def test_faiss_local_save_load() -> None:
     """Test end to end serialization."""
     texts = ["foo", "bar", "baz"]
     docsearch = FAISS.from_texts(texts, FakeEmbeddings())
-
-    with tempfile.NamedTemporaryFile() as temp_file:
-        docsearch.save_local(temp_file.name)
-        new_docsearch = FAISS.load_local(temp_file.name, FakeEmbeddings())
+    temp_timestamp = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    with tempfile.TemporaryDirectory(suffix="_" + temp_timestamp + "/") as temp_folder:
+        docsearch.save_local(temp_folder)
+        new_docsearch = FAISS.load_local(temp_folder, FakeEmbeddings())
     assert new_docsearch.index is not None
+
+
+def test_faiss_similarity_search_with_relevance_scores() -> None:
+    """Test the similarity search with normalized similarities."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = FAISS.from_texts(
+        texts,
+        FakeEmbeddings(),
+        relevance_score_fn=lambda score: 1.0 - score / math.sqrt(2),
+    )
+    outputs = docsearch.similarity_search_with_relevance_scores("foo", k=1)
+    output, score = outputs[0]
+    assert output == Document(page_content="foo")
+    assert score == 1.0
+
+
+def test_faiss_invalid_normalize_fn() -> None:
+    """Test the similarity search with normalized similarities."""
+    texts = ["foo", "bar", "baz"]
+    docsearch = FAISS.from_texts(
+        texts, FakeEmbeddings(), relevance_score_fn=lambda _: 2.0
+    )
+    with pytest.warns(Warning, match="scores must be between"):
+        docsearch.similarity_search_with_relevance_scores("foo", k=1)
+
+
+def test_missing_normalize_score_fn() -> None:
+    """Test doesn't perform similarity search without a normalize score function."""
+    with pytest.raises(ValueError):
+        texts = ["foo", "bar", "baz"]
+        faiss_instance = FAISS.from_texts(texts, FakeEmbeddings())
+        faiss_instance.relevance_score_fn = None
+        faiss_instance.similarity_search_with_relevance_scores("foo", k=2)

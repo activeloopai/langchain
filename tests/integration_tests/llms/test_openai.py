@@ -5,9 +5,10 @@ from typing import Generator
 
 import pytest
 
-from langchain.callbacks.base import CallbackManager
+from langchain.callbacks.manager import CallbackManager
+from langchain.chat_models.openai import ChatOpenAI
 from langchain.llms.loading import load_llm
-from langchain.llms.openai import OpenAI
+from langchain.llms.openai import OpenAI, OpenAIChat
 from langchain.schema import LLMResult
 from tests.unit_tests.callbacks.fake_callback_handler import FakeCallbackHandler
 
@@ -17,6 +18,13 @@ def test_openai_call() -> None:
     llm = OpenAI(max_tokens=10)
     output = llm("Say foo:")
     assert isinstance(output, str)
+
+
+def test_openai_model_param() -> None:
+    llm = OpenAI(model="foo")
+    assert llm.model_name == "foo"
+    llm = OpenAI(model_name="foo")
+    assert llm.model_name == "foo"
 
 
 def test_openai_extra_kwargs() -> None:
@@ -33,6 +41,22 @@ def test_openai_extra_kwargs() -> None:
     # Test that if provided twice it errors
     with pytest.raises(ValueError):
         OpenAI(foo=3, model_kwargs={"foo": 2})
+
+    # Test that if explicit param is specified in kwargs it errors
+    with pytest.raises(ValueError):
+        OpenAI(model_kwargs={"temperature": 0.2})
+
+    # Test that "model" cannot be specified in kwargs
+    with pytest.raises(ValueError):
+        OpenAI(model_kwargs={"model": "text-davinci-003"})
+
+
+def test_openai_llm_output_contains_model_name() -> None:
+    """Test llm_output contains model_name."""
+    llm = OpenAI(max_tokens=10)
+    llm_result = llm.generate(["Hello, how are you?"])
+    assert llm_result.llm_output is not None
+    assert llm_result.llm_output["model_name"] == llm.model_name
 
 
 def test_openai_stop_valid() -> None:
@@ -54,7 +78,7 @@ def test_openai_stop_error() -> None:
 
 
 def test_saving_loading_llm(tmp_path: Path) -> None:
-    """Test saving/loading an OpenAPI LLM."""
+    """Test saving/loading an OpenAI LLM."""
     llm = OpenAI(max_tokens=10)
     llm.save(file_path=tmp_path / "openai.yaml")
     loaded_llm = load_llm(tmp_path / "openai.yaml")
@@ -142,3 +166,112 @@ async def test_openai_async_streaming_callback() -> None:
     result = await llm.agenerate(["Write me a sentence with 100 words."])
     assert callback_handler.llm_streams == 10
     assert isinstance(result, LLMResult)
+
+
+def test_openai_chat_wrong_class() -> None:
+    """Test OpenAIChat with wrong class still works."""
+    llm = OpenAI(model_name="gpt-3.5-turbo")
+    output = llm("Say foo:")
+    assert isinstance(output, str)
+
+
+def test_openai_chat() -> None:
+    """Test OpenAIChat."""
+    llm = OpenAIChat(max_tokens=10)
+    output = llm("Say foo:")
+    assert isinstance(output, str)
+
+
+def test_openai_chat_streaming() -> None:
+    """Test OpenAIChat with streaming option."""
+    llm = OpenAIChat(max_tokens=10, streaming=True)
+    output = llm("Say foo:")
+    assert isinstance(output, str)
+
+
+def test_openai_chat_streaming_callback() -> None:
+    """Test that streaming correctly invokes on_llm_new_token callback."""
+    callback_handler = FakeCallbackHandler()
+    callback_manager = CallbackManager([callback_handler])
+    llm = OpenAIChat(
+        max_tokens=10,
+        streaming=True,
+        temperature=0,
+        callback_manager=callback_manager,
+        verbose=True,
+    )
+    llm("Write me a sentence with 100 words.")
+    assert callback_handler.llm_streams != 0
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_async_generate() -> None:
+    """Test async chat."""
+    llm = OpenAIChat(max_tokens=10)
+    output = await llm.agenerate(["Hello, how are you?"])
+    assert isinstance(output, LLMResult)
+
+
+@pytest.mark.asyncio
+async def test_openai_chat_async_streaming_callback() -> None:
+    """Test that streaming correctly invokes on_llm_new_token callback."""
+    callback_handler = FakeCallbackHandler()
+    callback_manager = CallbackManager([callback_handler])
+    llm = OpenAIChat(
+        max_tokens=10,
+        streaming=True,
+        temperature=0,
+        callback_manager=callback_manager,
+        verbose=True,
+    )
+    result = await llm.agenerate(["Write me a sentence with 100 words."])
+    assert callback_handler.llm_streams != 0
+    assert isinstance(result, LLMResult)
+
+
+def test_openai_modelname_to_contextsize_valid() -> None:
+    """Test model name to context size on a valid model."""
+    assert OpenAI().modelname_to_contextsize("davinci") == 2049
+
+
+def test_openai_modelname_to_contextsize_invalid() -> None:
+    """Test model name to context size on an invalid model."""
+    with pytest.raises(ValueError):
+        OpenAI().modelname_to_contextsize("foobar")
+
+
+_EXPECTED_NUM_TOKENS = {
+    "ada": 17,
+    "babbage": 17,
+    "curie": 17,
+    "davinci": 17,
+    "gpt-4": 12,
+    "gpt-4-32k": 12,
+    "gpt-3.5-turbo": 12,
+}
+
+_MODELS = models = [
+    "ada",
+    "babbage",
+    "curie",
+    "davinci",
+]
+_CHAT_MODELS = [
+    "gpt-4",
+    "gpt-4-32k",
+    "gpt-3.5-turbo",
+]
+
+
+@pytest.mark.parametrize("model", _MODELS)
+def test_openai_get_num_tokens(model: str) -> None:
+    """Test get_tokens."""
+    llm = OpenAI(model=model)
+    assert llm.get_num_tokens("表情符号是\n🦜🔗") == _EXPECTED_NUM_TOKENS[model]
+
+
+@pytest.mark.parametrize("model", _CHAT_MODELS)
+def test_chat_openai_get_num_tokens(model: str) -> None:
+    """Test get_tokens."""
+    llm = ChatOpenAI(model=model)
+    assert llm.get_num_tokens("表情符号是\n🦜🔗") == _EXPECTED_NUM_TOKENS[model]

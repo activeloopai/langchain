@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from pydantic import BaseModel, Extra, root_validator
 
+from langchain.callbacks.manager import CallbackManagerForLLMRun
 from langchain.llms.base import LLM
 from langchain.utils import get_from_dict_or_env
 
@@ -19,7 +20,7 @@ class AI21PenaltyData(BaseModel):
     applyToEmojis: bool = True
 
 
-class AI21(LLM, BaseModel):
+class AI21(LLM):
     """Wrapper around AI21 large language models.
 
     To use, you should have the environment variable ``AI21_API_KEY``
@@ -29,10 +30,10 @@ class AI21(LLM, BaseModel):
         .. code-block:: python
 
             from langchain.llms import AI21
-            ai21 = AI21(model="j1-jumbo")
+            ai21 = AI21(model="j2-jumbo-instruct")
     """
 
-    model: str = "j1-jumbo"
+    model: str = "j2-jumbo-instruct"
     """Model name to use."""
 
     temperature: float = 0.7
@@ -106,7 +107,13 @@ class AI21(LLM, BaseModel):
         """Return type of llm."""
         return "ai21"
 
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+    def _call(
+        self,
+        prompt: str,
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> str:
         """Call out to AI21's complete endpoint.
 
         Args:
@@ -134,10 +141,11 @@ class AI21(LLM, BaseModel):
                 base_url = "https://api.ai21.com/studio/v1/experimental"
             else:
                 base_url = "https://api.ai21.com/studio/v1"
+        params = {**self._default_params, **kwargs}
         response = requests.post(
             url=f"{base_url}/{self.model}/complete",
             headers={"Authorization": f"Bearer {self.ai21_api_key}"},
-            json={"prompt": prompt, "stopSequences": stop, **self._default_params},
+            json={"prompt": prompt, "stopSequences": stop, **params},
         )
         if response.status_code != 200:
             optional_detail = response.json().get("error")

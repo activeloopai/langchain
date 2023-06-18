@@ -33,7 +33,7 @@ class GoogleSearchAPIWrapper(BaseModel):
     - That’s all you have to fill up, the rest doesn’t matter.
     In the left-side menu, click Edit search engine → {your search engine name}
     → Setup Set Search the entire web to ON. Remove the URL you added from
-     the list of Sites to search.
+    the list of Sites to search.
     - Under Search engine ID you’ll find the search-engine-ID.
 
     4. Enable the Custom Search API
@@ -49,6 +49,7 @@ class GoogleSearchAPIWrapper(BaseModel):
     google_api_key: Optional[str] = None
     google_cse_id: Optional[str] = None
     k: int = 10
+    siterestrict: bool = False
 
     class Config:
         """Configuration for this pydantic object."""
@@ -56,11 +57,10 @@ class GoogleSearchAPIWrapper(BaseModel):
         extra = Extra.forbid
 
     def _google_search_results(self, search_term: str, **kwargs: Any) -> List[dict]:
-        res = (
-            self.search_engine.cse()
-            .list(q=search_term, cx=self.google_cse_id, **kwargs)
-            .execute()
-        )
+        cse = self.search_engine.cse()
+        if self.siterestrict:
+            cse = cse.siterestrict()
+        res = cse.list(q=search_term, cx=self.google_cse_id, **kwargs).execute()
         return res.get("items", [])
 
     @root_validator()
