@@ -5,11 +5,10 @@ import logging
 import re
 from typing import Optional, Union
 
-from pydantic import Field
-
 from langchain.agents.agent import AgentOutputParser
 from langchain.agents.structured_chat.prompt import FORMAT_INSTRUCTIONS
 from langchain.output_parsers import OutputFixingParser
+from langchain.pydantic_v1 import Field
 from langchain.schema import AgentAction, AgentFinish, OutputParserException
 from langchain.schema.language_model import BaseLanguageModel
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(__name__)
 class StructuredChatOutputParser(AgentOutputParser):
     """Output parser for the structured chat agent."""
 
-    pattern = re.compile(r"```(?:json)?\n(.*?)```", re.DOTALL)
+    pattern = re.compile(r"```(?:json\s+)?(\W.*?)```", re.DOTALL)
 
     def get_format_instructions(self) -> str:
         return FORMAT_INSTRUCTIONS

@@ -2,8 +2,6 @@
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import Extra, Field, root_validator
-
 from langchain.callbacks.manager import Callbacks
 from langchain.chains.combine_documents.base import (
     BaseCombineDocumentsChain,
@@ -11,6 +9,7 @@ from langchain.chains.combine_documents.base import (
 from langchain.chains.llm import LLMChain
 from langchain.docstore.document import Document
 from langchain.prompts.prompt import PromptTemplate
+from langchain.pydantic_v1 import Extra, Field, root_validator
 from langchain.schema import BasePromptTemplate, format_document
 
 
@@ -39,7 +38,7 @@ class StuffDocumentsChain(BaseCombineDocumentsChain):
             # details.
             document_prompt = PromptTemplate(
                 input_variables=["page_content"],
-                 template="{page_content}"
+                template="{page_content}"
             )
             document_variable_name = "context"
             llm = OpenAI()
@@ -151,7 +150,7 @@ class StuffDocumentsChain(BaseCombineDocumentsChain):
         """
         inputs = self._get_inputs(docs, **kwargs)
         prompt = self.llm_chain.prompt.format(**inputs)
-        return self.llm_chain.llm.get_num_tokens(prompt)
+        return self.llm_chain._get_num_tokens(prompt)
 
     def combine_docs(
         self, docs: List[Document], callbacks: Callbacks = None, **kwargs: Any

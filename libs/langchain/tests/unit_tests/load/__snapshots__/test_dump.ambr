@@ -5,6 +5,9 @@
     "lc": 1,
     "type": "constructor",
     "id": [
+      "tests",
+      "unit_tests",
+      "load",
       "test_dump",
       "Person"
     ],
@@ -27,6 +30,9 @@
     "lc": 1,
     "type": "constructor",
     "id": [
+      "tests",
+      "unit_tests",
+      "load",
       "test_dump",
       "SpecialPerson"
     ],
@@ -219,16 +225,6 @@
             "type": "secret",
             "id": [
               "OPENAI_API_KEY"
-            ]
-          },
-          "client": {
-            "lc": 1,
-            "type": "not_implemented",
-            "id": [
-              "openai",
-              "api_resources",
-              "completion",
-              "Completion"
             ]
           }
         }
